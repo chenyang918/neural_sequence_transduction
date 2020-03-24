@@ -5,40 +5,36 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 import librosa
 import numpy as np
+import json
 
 class TIMIT(Dataset):
     _ext_txt = ".TXT"
     _ext_phone = ".PHN"
     _ext_word = ".WRD"
     _ext_audio = ".WAV"
-    _UNK_LABEL = '_UNK_'
-
+    _BLANK_LABEL = '_B_'
+    '''
+    mapping from:
+    Lee, K. and Hon, H. Speaker-independent phone recognition using hidden markov models. 
+    IEEE Transactions on Acoustics, Speech, and Signal Processing, 1989.
+    '''
     _phone_map_48 ={
         'ux':'uw',
-
         'axr':'er',
-
         'em':'m',
-
         'nx':'n',
-
         'eng':'ng',
-
         'hv':'hh',
-
         'pcl': 'cl',
         'tcl': 'cl',
         'kcl': 'cl',
         'qcl': 'cl',
-
         'bcl': 'vcl',
         'gcl': 'vcl',
         'dcl': 'vcl',
-
         'h#':'sil',
         '#h':'sil',
         'pau':'sil',
-
         'ax-h':'ax',
         "q": None
     }
@@ -71,9 +67,40 @@ class TIMIT(Dataset):
     def __len__(self):
         return len(self._walker)
 
+    def load_dataset_config(self, root_dir):
+        self.read_stats(root_dir)
+        self.read_vocab(root_dir)
+
+    def get_audio_features(self, fileid):
+        '''
+        Standard speech preprocessing was applied to transform the audio files into feature sequences. 26 channel
+        mel-frequency filter bank and a pre-emphasis coefficient of 0.97 were used to compute 12 mel-frequency
+        cepstral coefficients plus an energy coefficient on 25ms Hamming windows at 10ms intervals.
+        Delta coefficients were added to create input sequences of length 26 vectors, and all coefficient
+        were normalised to have mean zero and standard deviation one over the training set.
+        '''
+        file_audio = fileid + self._ext_audio
+        d, sr = librosa.load(file_audio, sr=None)
+        d = librosa.effects.preemphasis(d)
+        hop_length = int(0.010 * sr)
+        n_fft = int(0.025 * sr)
+        mfccs = librosa.feature.mfcc(d, sr, n_mfcc=13,
+                                     hop_length=hop_length,
+                                     n_fft=n_fft, window='hamming')
+        mfccs[0] = librosa.feature.rms(y=d,
+                                       hop_length=hop_length,
+                                       frame_length=n_fft)
+        deltas = librosa.feature.delta(mfccs)
+        mfccs_plus_deltas = np.vstack([mfccs, deltas])
+
+        #individual wave file normalization - power norm might does this so not needed
+        #mfccs_plus_deltas -= (np.mean(mfccs_plus_deltas, axis=0) + 1e-8)
+        mfccs_plus_deltas = mfccs_plus_deltas.swapaxes(0, 1)
+        return mfccs_plus_deltas
+
     def dump_phone_vocab(self, root_dir):
         walker = []
-        for p in ['TRAIN', 'TEST']:
+        for p in ['TRAIN']:
             for curr_root, _, fnames in sorted(os.walk(os.path.join(root_dir, p))):
                 for fname in fnames:
                     if fname.endswith(self._ext_phone):
@@ -87,6 +114,33 @@ class TIMIT(Dataset):
                     phone_vocab.append(audio_phone['phone'])
         with open(os.path.join(root_dir, 'phone.vocab'), 'w', encoding='utf8') as f:
             f.write('\n'.join(sorted(phone_vocab)))
+
+    def dump_mean_var(self, root_dir):
+        walker = []
+        for p in ['TRAIN']:
+            for curr_root, _, fnames in sorted(os.walk(os.path.join(root_dir, p))):
+                for fname in fnames:
+                    if fname.endswith(self._ext_phone):
+                        walker.append(os.path.join(curr_root, fname[:-len(self._ext_phone)]))
+
+        all_mfccs = []
+        for fileid in walker:
+            mfcc = self.get_audio_features(fileid)
+            mfcc = np.vsplit(mfcc, mfcc.shape[0])
+            all_mfccs.extend(mfcc)
+
+        all_mfccs = np.stack(all_mfccs, axis=0).squeeze(axis=1)
+        mean = np.expand_dims(all_mfccs.mean(axis=0), axis=0)
+        var = np.expand_dims(all_mfccs.var(axis=0), axis=0)
+        np.savez(os.path.join(root_dir, 'stats.npz'), mean=mean, var=var)
+
+    def read_stats(self, root_dir):
+        train_stats = np.load(os.path.join(root_dir, 'stats.npz'))
+        self._mean = np.expand_dims(train_stats['mean'], axis=0)
+        self._var = np.expand_dims(train_stats['var'], axis=0)
+
+    def normalize(self, mfcc):
+        return (mfcc - self._mean) / self._var
 
     def read_vocab(self, root_dir):
         phone_vocab = []
@@ -144,29 +198,15 @@ class TIMIT(Dataset):
         return audio_phones
 
     def load_timit_item(self, fileid):
-        text_item = self.load_txt_item(fileid)
+        mfccs = self.get_audio_features(fileid)
+        mfccs = self.normalize(mfccs)
+        mfccs = np.expand_dims(mfccs, axis=0)
+        audio_phones = self.load_phone_item(fileid)
+        phones = [self._phone_vocab2id[audio_phone['phone']] for audio_phone in audio_phones]
 
-        file_audio = fileid + self._ext_audio
-        y, sr = librosa.load(file_audio, sr=None, offset=text_item['start'], duration=text_item['end'])
-        #S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=26)
-
-        mfccs = librosa.feature.mfcc(y=y, sr=sr,
-                                     n_mfcc=12,
-                                     window='hamming',
-                                     win_length=25,
-                                     hop_length=10,
-                                     n_mels=26)
-        #mel_specgram = mel_specgram.swapaxes(0, 1)
-
-
-        ''' 
-        audio_text = [self._text_vocab2id[t] if t in self._text_vocab2id else self._UNK_LABEL
-                      for t in self.load_txt_item(fileid)]
-        audio_phone = [self._phone_vocab2id[p] if p in self._phone_vocab2id else self._UNK_LABEL
-                      for p in self.load_phone_item(fileid)]
-        '''
         return {
-            'mfccs':torch.from_numpy(mfccs)
+            'mfccs':torch.from_numpy(mfccs),
+            'phones':torch.LongTensor(phones)
         }
 
 def variable_collate_fn(batch):
@@ -184,12 +224,12 @@ def variable_collate_fn(batch):
         'mfccs_mask': mfccs_mask
     }
 if __name__ == '__main__':
-    ''' 
+
     timit_dataset = TIMIT(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/TRAIN/'))
-    timit_dataset.dump_phone_vocab(os.path.join(os.path.expanduser('~'),
+    timit_dataset.dump_mean_var(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/'))
-
+    '''
     dataloader = DataLoader(timit_dataset, batch_size=4, shuffle=True,
                             num_workers=1, collate_fn=variable_collate_fn)
 
@@ -197,19 +237,3 @@ if __name__ == '__main__':
         print(i_batch, sample_batched['mel_specgram'].size())
         break
     '''
-    d, sr = librosa.load('/Users/atulkumar/neural_sequence_transduction/TIMIT/TRAIN/DR1/FCJF0/SA1.WAV.wav', sr=None)
-    d = librosa.effects.preemphasis(d)
-    hop_length = int(0.010 * sr)
-    n_fft = int(0.025 * sr)
-    mfccs = librosa.feature.mfcc(d, sr, n_mfcc=13,
-                                 hop_length=hop_length,
-                                 n_fft=n_fft, window='hamming')
-    mfccs[0] = librosa.feature.rms(y=d,
-                                   hop_length=hop_length,
-                                   frame_length=n_fft)
-    deltas = librosa.feature.delta(mfccs)
-    mfccs_plus_deltas = np.vstack([mfccs, deltas])
-
-    mfccs_plus_deltas -= (np.mean(mfccs_plus_deltas, axis=0) + 1e-8)
-
-    print(mfccs_plus_deltas.shape)
