@@ -4,7 +4,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 import librosa
-from librosa.feature import melspectrogram
+import numpy as np
 
 class TIMIT(Dataset):
     _ext_txt = ".TXT"
@@ -144,13 +144,21 @@ class TIMIT(Dataset):
         return audio_phones
 
     def load_timit_item(self, fileid):
-        file_audio = fileid + self._ext_audio
-
-        waveform, sample_rate = librosa.load(file_audio)
-        mel_specgram = melspectrogram(y=waveform, sr=sample_rate)
-        mel_specgram = mel_specgram.swapaxes(0, 1)
         text_item = self.load_txt_item(fileid)
-        mel_specgram = mel_specgram[text_item['start']:text_item['end']+1, :]
+
+        file_audio = fileid + self._ext_audio
+        y, sr = librosa.load(file_audio, sr=None, offset=text_item['start'], duration=text_item['end'])
+        #S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=26)
+
+        mfccs = librosa.feature.mfcc(y=y, sr=sr,
+                                     n_mfcc=12,
+                                     window='hamming',
+                                     win_length=25,
+                                     hop_length=10,
+                                     n_mels=26)
+        #mel_specgram = mel_specgram.swapaxes(0, 1)
+
+
         ''' 
         audio_text = [self._text_vocab2id[t] if t in self._text_vocab2id else self._UNK_LABEL
                       for t in self.load_txt_item(fileid)]
@@ -158,35 +166,50 @@ class TIMIT(Dataset):
                       for p in self.load_phone_item(fileid)]
         '''
         return {
-            'mel_specgram':torch.from_numpy(mel_specgram)
+            'mfccs':torch.from_numpy(mfccs)
         }
 
 def variable_collate_fn(batch):
     pad_token_id = -1
-    mel_specgram = []
-
+    mfccs = []
 
     for sample in batch:
-        mel_specgram.append(sample['mel_specgram'])
+        mfccs.append(sample['mfccs'])
 
-    mel_specgram = pad_sequence(mel_specgram, batch_first=True, padding_value=pad_token_id)
-    mel_specgram_mask = mel_specgram.ne(pad_token_id)
+    mfccs = pad_sequence(mfccs, batch_first=True, padding_value=pad_token_id)
+    mfccs_mask = mfccs.ne(pad_token_id)
 
     return {
-        'mel_specgram': mel_specgram,
-        'mel_specgram_mask': mel_specgram_mask
+        'mfccs': mfccs,
+        'mfccs_mask': mfccs_mask
     }
 if __name__ == '__main__':
+    ''' 
     timit_dataset = TIMIT(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/TRAIN/'))
     timit_dataset.dump_phone_vocab(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/'))
-    ''' 
+
     dataloader = DataLoader(timit_dataset, batch_size=4, shuffle=True,
                             num_workers=1, collate_fn=variable_collate_fn)
 
     for i_batch, sample_batched in enumerate(dataloader):
         print(i_batch, sample_batched['mel_specgram'].size())
-        if i_batch == 3:
-            break
+        break
     '''
+    d, sr = librosa.load('/Users/atulkumar/neural_sequence_transduction/TIMIT/TRAIN/DR1/FCJF0/SA1.WAV.wav', sr=None)
+    d = librosa.effects.preemphasis(d)
+    hop_length = int(0.010 * sr)
+    n_fft = int(0.025 * sr)
+    mfccs = librosa.feature.mfcc(d, sr, n_mfcc=13,
+                                 hop_length=hop_length,
+                                 n_fft=n_fft, window='hamming')
+    mfccs[0] = librosa.feature.rms(y=d,
+                                   hop_length=hop_length,
+                                   frame_length=n_fft)
+    deltas = librosa.feature.delta(mfccs)
+    mfccs_plus_deltas = np.vstack([mfccs, deltas])
+
+    mfccs_plus_deltas -= (np.mean(mfccs_plus_deltas, axis=0) + 1e-8)
+
+    print(mfccs_plus_deltas.shape)
