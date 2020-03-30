@@ -67,7 +67,7 @@ class TIMIT(Dataset):
     def __len__(self):
         return len(self._walker)
 
-    def load_dataset_config(self, root_dir):
+    def init_dataset(self, root_dir):
         self.read_stats(root_dir)
         self.read_vocab(root_dir)
 
@@ -84,14 +84,15 @@ class TIMIT(Dataset):
         d = librosa.effects.preemphasis(d)
         hop_length = int(0.010 * sr)
         n_fft = int(0.025 * sr)
-        mfccs = librosa.feature.mfcc(d, sr, n_mfcc=13,
+        mfcc = librosa.feature.mfcc(d, sr, n_mfcc=13,
                                      hop_length=hop_length,
                                      n_fft=n_fft, window='hamming')
-        mfccs[0] = librosa.feature.rms(y=d,
+        mfcc[0] = librosa.feature.rms(y=d,
                                        hop_length=hop_length,
                                        frame_length=n_fft)
-        deltas = librosa.feature.delta(mfccs)
-        mfccs_plus_deltas = np.vstack([mfccs, deltas])
+        deltas1 = librosa.feature.delta(mfcc, order=1)
+        deltas2 = librosa.feature.delta(mfcc, order=2)
+        mfccs_plus_deltas = np.vstack([mfcc, deltas1, deltas2])
 
         #individual wave file normalization - power norm might does this so not needed
         #mfccs_plus_deltas -= (np.mean(mfccs_plus_deltas, axis=0) + 1e-8)
@@ -199,41 +200,52 @@ class TIMIT(Dataset):
 
     def load_timit_item(self, fileid):
         mfccs = self.get_audio_features(fileid)
+        length = len(mfccs)
         mfccs = self.normalize(mfccs)
         mfccs = np.expand_dims(mfccs, axis=0)
         audio_phones = self.load_phone_item(fileid)
         phones = [self._phone_vocab2id[audio_phone['phone']] for audio_phone in audio_phones]
 
         return {
-            'mfccs':torch.from_numpy(mfccs),
-            'phones':torch.LongTensor(phones)
+            'mfcc':torch.from_numpy(mfccs),
+            'length': torch.LongTensor([length]),
+            'phone':torch.LongTensor(phones)
         }
 
 def variable_collate_fn(batch):
     pad_token_id = -1
     mfccs = []
-
+    phones = []
+    lengths = []
     for sample in batch:
-        mfccs.append(sample['mfccs'])
+        mfccs.append(sample['mfcc'])
+        lengths.append(sample['length'])
+        phones.append(sample['phone'].unsqueeze(0))
 
     mfccs = pad_sequence(mfccs, batch_first=True, padding_value=pad_token_id)
-    mfccs_mask = mfccs.ne(pad_token_id)
+    lengths = torch.cat(lengths)
+    phones = pad_sequence(phones, batch_first=True, padding_value=pad_token_id)
 
     return {
-        'mfccs': mfccs,
-        'mfccs_mask': mfccs_mask
+        'mfcc': mfccs,
+        'length': lengths,
+        'phone': phones
     }
 if __name__ == '__main__':
 
     timit_dataset = TIMIT(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/TRAIN/'))
-    timit_dataset.dump_mean_var(os.path.join(os.path.expanduser('~'),
-                                       'neural_sequence_transduction/TIMIT/'))
     '''
+    timit_dataset.dump_phone_vocab()
+    timit_dataset.dump_mean_var(os.path.join(os.path.expanduser('~'),
+                                             'neural_sequence_transduction/TIMIT/'))
+    timit_dataset.init_dataset(os.path.join(os.path.expanduser('~'),
+                                             'neural_sequence_transduction/TIMIT/'))
+     '''
     dataloader = DataLoader(timit_dataset, batch_size=4, shuffle=True,
                             num_workers=1, collate_fn=variable_collate_fn)
 
     for i_batch, sample_batched in enumerate(dataloader):
-        print(i_batch, sample_batched['mel_specgram'].size())
+        print(i_batch, sample_batched['mel_specgram'].size(),  sample_batched['phones'].size())
         break
-    '''
+
