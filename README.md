@@ -5,10 +5,13 @@ pytorch implementation of
 
 [Connectionist Temporal Classification: Labelling Unsegmented Sequence Data with Recurrent Neural Networks](https://www.cs.toronto.edu/~graves/icml_2006.pdf)
 
+Reference:
+[Supervised Sequence Labelling with Recurrent Neural Networks](https://www.cs.toronto.edu/~graves/preprint.pdf)
+
 
 # TO DO
 
-- [ ] Make Timit datsource
+- [x] Make Timit datsource
 - [ ] implement model
 - [ ] train model
 - [ ] compare the result with the original paper
