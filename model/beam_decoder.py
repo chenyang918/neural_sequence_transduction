@@ -36,14 +36,12 @@ def prefix_beam_search(logprob, T, num_tags):
     beam.append(beam_entry)
 
     l_star, P_l_star = beam_entry.path, beam_entry.P_path_full
-
     while len(beam) > 0:
         beam.sort(key=lambda x: x.P_path_partial)
         p_star = beam[-1]
         beam.pop()
 
         prob_remaining = p_star.P_path_partial
-
         if prob_remaining <= P_l_star:  # done
             break
 
@@ -57,7 +55,6 @@ def prefix_beam_search(logprob, T, num_tags):
             gamma.append(gamma_entry)
 
             prefix_prob = gamma_entry.other
-
             for t in range(1, T):
                 new_label_prob = p_star.gamma[t - 1].blank
                 if len(p_star.path) == 0 or p_star.path[-1] != k:

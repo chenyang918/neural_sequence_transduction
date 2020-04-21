@@ -5,6 +5,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.nn import Conv1d, ReLU
 from utils import common_util
 import numpy as np
+from model.beam_decoder import prefix_beam_search
 
 class ConnectionistTemporalClassification(nn.Module):
     def __init__(self, model_config):
@@ -86,8 +87,6 @@ class ConnectionistTemporalClassification(nn.Module):
             out_paths.append(self.path_to_str(path))
         return out_paths
 
-
-
     def prefix_search_decode(self, logits, length):
         logprobs = logits.log_softmax(dim=2)
         logprobs = logprobs.cpu().data.numpy()
@@ -95,4 +94,5 @@ class ConnectionistTemporalClassification(nn.Module):
 
         out_paths = []
         for logprob, T in zip(logprobs, length):
-            pass
+            out_paths.append(prefix_beam_search(logprob, T, self.model_config.num_tags))
+        return out_paths
