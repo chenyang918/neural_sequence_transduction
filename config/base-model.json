@@ -1,9 +1,9 @@
 {
-  "input_size":26,
-  "lstm_dim":100,
+  "input_size":39,
+  "lstm_dim":128,
   "lr":1e-4,
   "momentum":0.9,
   "init_range": 0.1,
-  "noise_range": 0.6,
+  "noise_range": 0.6, //can be used as dropout
   "blank_threshold":0.999
 }

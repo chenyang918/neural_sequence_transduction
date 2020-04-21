@@ -86,11 +86,13 @@ class ConnectionistTemporalClassification(nn.Module):
             out_paths.append(self.path_to_str(path))
         return out_paths
 
+
+
     def prefix_search_decode(self, logits, length):
         logprobs = logits.log_softmax(dim=2)
         logprobs = logprobs.cpu().data.numpy()
         length = length.cpu().data.numpy()
 
         out_paths = []
-        for logprob, curr_len in zip(logprobs, length):
-            beams = []
+        for logprob, T in zip(logprobs, length):
+            pass

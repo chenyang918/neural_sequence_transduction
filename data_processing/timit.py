@@ -235,17 +235,21 @@ if __name__ == '__main__':
 
     timit_dataset = TIMIT(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/TRAIN/'))
-    '''
+
+    ''' 
     timit_dataset.dump_phone_vocab()
     timit_dataset.dump_mean_var(os.path.join(os.path.expanduser('~'),
                                              'neural_sequence_transduction/TIMIT/'))
     timit_dataset.init_dataset(os.path.join(os.path.expanduser('~'),
                                              'neural_sequence_transduction/TIMIT/'))
-     '''
+    '''
+
     dataloader = DataLoader(timit_dataset, batch_size=4, shuffle=True,
                             num_workers=1, collate_fn=variable_collate_fn)
 
     for i_batch, sample_batched in enumerate(dataloader):
         print(i_batch, sample_batched['mel_specgram'].size(),  sample_batched['phones'].size())
         break
+
+
 
