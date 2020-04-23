@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from data_processing.timit import get_dataloader
 
 def label_error_rate(path_true, path_hat):
     n = len(path_true)
@@ -19,19 +20,18 @@ def label_error_rate(path_true, path_hat):
 
     return dp[n][m] / n
 
-def evaluate(test_generator, model, is_cuda):
+def evaluate(test_generator, model, batch_size, is_cuda):
+    dataloader = get_dataloader(test_generator, batch_size, False)
     model.eval()
     lers = []
     with torch.set_grad_enabled(False):
-        for inputs in test_generator:
+        for i_batch, inputs in enumerate(dataloader):
             if is_cuda:
-                for k, v in inputs.items():
-                    inputs[k] = v.cuda()
-
-
+                for k in inputs:
+                    inputs[k] = inputs[k].cuda()
             logits = model(**inputs)
             path_hat = model.best_path_decode(logits, inputs['length'])
-            path_true = inputs['labels'].cpu().data.numpy()
+            path_true = inputs['phone'].cpu().data.numpy()
             for b in len(path_hat):
                 lers.append(label_error_rate(path_true[b], path_hat[b]))
     ler = np.mean(lers)

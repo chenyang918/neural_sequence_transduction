@@ -59,6 +59,9 @@ class TIMIT(Dataset):
                     walker.append(os.path.join(curr_root, fname[:-len(self._ext_phone)]))
 
         self._walker = list(walker)
+        ######
+        self._walker = self._walker[:100]
+        #####
 
     def __getitem__(self, n):
         fileid = self._walker[n]
@@ -100,15 +103,8 @@ class TIMIT(Dataset):
         return mfccs_plus_deltas
 
     def dump_phone_vocab(self, root_dir):
-        walker = []
-        for p in ['TRAIN']:
-            for curr_root, _, fnames in sorted(os.walk(os.path.join(root_dir, p))):
-                for fname in fnames:
-                    if fname.endswith(self._ext_phone):
-                        walker.append(os.path.join(curr_root, fname[:-len(self._ext_phone)]))
-
         phone_vocab = []
-        for fileid in walker:
+        for fileid in self._walker:
             audio_phones = self.load_phone_item(fileid)
             for audio_phone in audio_phones:
                 if audio_phone['phone'] not in phone_vocab:
@@ -117,15 +113,8 @@ class TIMIT(Dataset):
             f.write('\n'.join(sorted(phone_vocab)))
 
     def dump_mean_var(self, root_dir):
-        walker = []
-        for p in ['TRAIN']:
-            for curr_root, _, fnames in sorted(os.walk(os.path.join(root_dir, p))):
-                for fname in fnames:
-                    if fname.endswith(self._ext_phone):
-                        walker.append(os.path.join(curr_root, fname[:-len(self._ext_phone)]))
-
         all_mfccs = []
-        for fileid in walker:
+        for fileid in self._walker:
             mfcc = self.get_audio_features(fileid)
             mfcc = np.vsplit(mfcc, mfcc.shape[0])
             all_mfccs.extend(mfcc)
@@ -137,8 +126,8 @@ class TIMIT(Dataset):
 
     def read_stats(self, root_dir):
         train_stats = np.load(os.path.join(root_dir, 'stats.npz'))
-        self._mean = np.expand_dims(train_stats['mean'], axis=0)
-        self._var = np.expand_dims(train_stats['var'], axis=0)
+        self._mean = train_stats['mean']
+        self._var = train_stats['var']
 
     def normalize(self, mfcc):
         return (mfcc - self._mean) / self._var
@@ -147,7 +136,7 @@ class TIMIT(Dataset):
         phone_vocab = []
         for w in open(os.path.join(root_dir, 'phone.vocab'), 'r', encoding='utf8'):
             if w:
-                phone_vocab.append(w)
+                phone_vocab.append(w.replace('\n', ''))
 
         self._phone_vocab = phone_vocab
         self._phone_vocab2id = {p:i for i, p in enumerate(phone_vocab)}
@@ -202,7 +191,6 @@ class TIMIT(Dataset):
         mfccs = self.get_audio_features(fileid)
         length = len(mfccs)
         mfccs = self.normalize(mfccs)
-        mfccs = np.expand_dims(mfccs, axis=0)
         audio_phones = self.load_phone_item(fileid)
         phones = [self._phone_vocab2id[audio_phone['phone']] for audio_phone in audio_phones]
 
@@ -220,7 +208,7 @@ def variable_collate_fn(batch):
     for sample in batch:
         mfccs.append(sample['mfcc'])
         lengths.append(sample['length'])
-        phones.append(sample['phone'].unsqueeze(0))
+        phones.append(sample['phone'])
 
     mfccs = pad_sequence(mfccs, batch_first=True, padding_value=pad_token_id)
     lengths = torch.cat(lengths)
@@ -231,25 +219,25 @@ def variable_collate_fn(batch):
         'length': lengths,
         'phone': phones
     }
+def get_dataloader(timit_dataset, batch_size, is_shuffle, num_worker = 0):
+    dataloader = DataLoader(timit_dataset, batch_size=batch_size, shuffle=is_shuffle,
+                            num_workers=num_worker, collate_fn=variable_collate_fn)
+    return dataloader
 if __name__ == '__main__':
 
     timit_dataset = TIMIT(os.path.join(os.path.expanduser('~'),
                                        'neural_sequence_transduction/TIMIT/TRAIN/'))
 
-    ''' 
-    timit_dataset.dump_phone_vocab()
-    timit_dataset.dump_mean_var(os.path.join(os.path.expanduser('~'),
-                                             'neural_sequence_transduction/TIMIT/'))
-    timit_dataset.init_dataset(os.path.join(os.path.expanduser('~'),
-                                             'neural_sequence_transduction/TIMIT/'))
-    '''
+    output_dir = os.path.join(os.path.expanduser('~'),
+                                             'neural_sequence_transduction/TIMIT/')
+    #timit_dataset.dump_phone_vocab(output_dir)
+    #timit_dataset.dump_mean_var(output_dir)
 
-    dataloader = DataLoader(timit_dataset, batch_size=4, shuffle=True,
-                            num_workers=1, collate_fn=variable_collate_fn)
+    timit_dataset.init_dataset(output_dir)
+    dataloader = get_dataloader(timit_dataset, 4, True)
 
     for i_batch, sample_batched in enumerate(dataloader):
-        print(i_batch, sample_batched['mel_specgram'].size(),  sample_batched['phones'].size())
-        break
+        print(i_batch)
 
 
 

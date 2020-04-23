@@ -20,7 +20,7 @@ class ConnectionistTemporalClassification(nn.Module):
         self.clf = nn.Linear(2 * model_config.lstm_dim, model_config.num_tags + 1)
 
         common_util.init_lstm_wt(self.lstm)
-        common_util.init_linear_wt(self.hidden_layer)
+        common_util.init_linear_wt(self.clf)
 
     def forward(self, mfcc, length, **kwargs):
         lengths = length.view(-1).tolist()
@@ -36,10 +36,10 @@ class ConnectionistTemporalClassification(nn.Module):
         b, t_k, d = list(logits.size())
         loss = 0
         for i in range(b):
-            curr_len = length[i].cpu().data.numpy()
-            curr_logit = logits[i].cpu().data.numpy()
-            curr_phone = phone[i].cpu().data.numpy()
-            loss += self.get_ctc_loss_single(curr_len, curr_logit, curr_phone)
+            curr_len = length[i]#.cpu().data.numpy()
+            curr_logit = logits[i]#.cpu().data.numpy()
+            curr_phone = phone[i]#.cpu().data.numpy()
+            loss += self.get_ctc_loss_single(curr_logit, curr_len, curr_phone)
         return loss
 
     '''
@@ -59,7 +59,7 @@ class ConnectionistTemporalClassification(nn.Module):
     def get_ctc_loss_single(self, y, T, phone):
         num_phone = len(phone)
         S = 2*num_phone + 1
-        alpha = np.zeros(T + 1, S + 1)
+        alpha = torch.zeros((T + 1, S + 1))
         t, s = 1, 1
         alpha[t, s] = y[t-1, self.get_phone_id(s, phone)]
         t, s = 1, 2

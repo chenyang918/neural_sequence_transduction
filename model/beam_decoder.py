@@ -14,6 +14,17 @@ class BeamEntry(object):
         self.P_path_full = None
         self.P_path_partial = None
 
+def prefix_beam_search_split(logprob, T, threshold):
+    start = 0
+    ranges = []
+    for t in range(1, T):
+        if logprob[t, 0] >= threshold:
+            ranges.append((start, t))
+            start = t+1
+    if start < T:
+        ranges.append((start, T-1))
+    return ranges
+
 def prefix_beam_search(logprob, T, num_tags):
     beam = []
     gamma = []
