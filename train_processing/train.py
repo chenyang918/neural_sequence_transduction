@@ -93,20 +93,20 @@ def train(output_root_dir, train_data, dev_data, model_config):
 
     print(f'{global_step} / {t_total} train loss: {exp_loss} lr: {scheduler.get_lr()[0]}', flush=True)
 
-
 def process_train(root_dir, data_dir, model_config_filename):
     output_root_dir = os.path.join(root_dir, 'dl_model') #f'dl_model_{int(time.time())}')
     if not os.path.exists(output_root_dir):
         os.makedirs(output_root_dir)
     print(f'model out dir {output_root_dir}', flush=True)
 
-    train_dataset = TIMIT(os.path.join(data_dir, 'TRAIN'))
-    #train_dataset.dump_phone_vocab(output_root_dir)
-    #train_dataset.dump_mean_var(output_root_dir)
-    train_dataset.init_dataset(output_root_dir)
+    train_data_dir = os.path.join(data_dir, 'TRAIN')
+    train_dataset = TIMIT('train', train_data_dir, train_data_dir, False)
+    train_dataset.load_stat_vocab(train_data_dir)
 
-    dev_dataset = TIMIT(os.path.join(data_dir, 'TEST'))
-    dev_dataset.init_dataset(output_root_dir)
+    test_data_dir = os.path.join(data_dir, 'TEST')
+    dev_dataset = TIMIT('test', test_data_dir, test_data_dir, False)
+    dev_dataset.load_stat_vocab(train_data_dir)
+
     model_config = common_util.get_config(model_config_filename)
     model_config.num_tags = len(train_dataset._phone_vocab)
     train(output_root_dir, train_dataset, dev_dataset, model_config)
