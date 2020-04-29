@@ -29,8 +29,8 @@ def evaluate(test_generator, model, batch_size, is_cuda):
             if is_cuda:
                 for k in inputs:
                     inputs[k] = inputs[k].cuda()
-            logits = model(**inputs)
-            path_hat = model.best_path_decode(logits, inputs['length'])
+            logprobs = model(**inputs)
+            path_hat = model.best_path_decode(logprobs, inputs['length'])
             path_true = inputs['phone'].cpu().data.numpy()
             for b in len(path_hat):
                 lers.append(label_error_rate(path_true[b], path_hat[b]))

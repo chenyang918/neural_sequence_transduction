@@ -59,8 +59,8 @@ def train(output_root_dir, train_data, dev_data, model_config):
                     inputs[k] = inputs[k].cuda()
 
             optimizer.zero_grad()
-            logits = model(**inputs)
-            loss = model.get_loss(logits, inputs['phone'], inputs['length'])
+            logprobs = model(**inputs)
+            loss = model.get_loss(logprobs, inputs['phone'], inputs['length'])
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), model_config.max_grad_norm)

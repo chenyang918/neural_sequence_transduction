@@ -1,7 +1,9 @@
 import numpy as np
 
-def exp_sum(a, b):
-    return np.log(np.exp(a) + np.exp(b))
+def logsumexp(a, b):
+    m = np.max(a,b)
+    return np.log(np.exp(a-m) + np.exp(b-m)) + m
+
 class GammaEntry(object):
     def __init__(self):
         self.blank = None
@@ -69,14 +71,14 @@ def prefix_beam_search(logprob, T, num_tags):
             for t in range(1, T):
                 new_label_prob = p_star.gamma[t - 1].blank
                 if len(p_star.path) == 0 or p_star.path[-1] != k:
-                    new_label_prob = exp_sum(new_label_prob, p_star.gamma[t - 1].other)
+                    new_label_prob = logsumexp(new_label_prob, p_star.gamma[t - 1].other)
                 gamma_entry = GammaEntry()
-                gamma_entry.other = logprob[t, k] + exp_sum(new_label_prob, gamma[t - 1].other)
-                gamma_entry.blank = logprob[t, 0] + exp_sum(gamma[t - 1].blank, gamma[t - 1].other)
+                gamma_entry.other = logprob[t, k] + logsumexp(new_label_prob, gamma[t - 1].other)
+                gamma_entry.blank = logprob[t, 0] + logsumexp(gamma[t - 1].blank, gamma[t - 1].other)
                 gamma.append(gamma_entry)
-                prefix_prob = exp_sum(prefix_prob, (logprob[t, k] + new_label_prob))
+                prefix_prob = logsumexp(prefix_prob, (logprob[t, k] + new_label_prob))
 
-            P_path_full = exp_sum(gamma[T - 1].blank, gamma[T - 1].other)
+            P_path_full = logsumexp(gamma[T - 1].blank, gamma[T - 1].other)
             P_path_partial = prefix_prob - P_path_full
 
             prob_remaining = prob_remaining - P_path_partial
