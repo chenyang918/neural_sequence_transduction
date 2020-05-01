@@ -26,7 +26,8 @@ def prefix_beam_search_split(logprob, T, threshold):
     if start < T:
         ranges.append((start, T-1))
     return ranges
-
+#page 64 Prefix Search Decoding Algorithm 
+#Supervised Sequence Labelling with Recurrent Neural Networks (https://www.cs.toronto.edu/~graves/preprint.pdf
 def prefix_beam_search(logprob, T, num_tags):
     beam = []
     gamma = []
