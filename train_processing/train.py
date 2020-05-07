@@ -11,7 +11,7 @@ import time
 import json
 import codecs
 from data_processing.timit import TIMIT, get_dataloader
-from torch.optim import Adam
+from torch.optim import SGD
 from torch.optim.lr_scheduler import LambdaLR
 from model.CTCNetwork import ConnectionistTemporalClassification
 import common_util
@@ -29,10 +29,13 @@ def get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
 
-def get_optimizer(model, config, t_total):
-    optimizer = Adam(model.parameters(), amsgrad=True)
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=config.warmup_steps,
-                                                num_training_steps=t_total)
+def get_optimizer(model, t_total):
+    optimizer = SGD(model.parameters(),
+                    lr = model.model_config.lr,
+                    momentum=model.model_config.momentum)
+    scheduler = None #get_linear_schedule_with_warmup(optimizer,
+    #                                            num_warmup_steps=model.model_config.warmup_steps,
+    #                                            num_training_steps=t_total)
     return optimizer, scheduler
 
 def train(output_root_dir, train_data, dev_data, model_config):
@@ -43,7 +46,7 @@ def train(output_root_dir, train_data, dev_data, model_config):
     data_size = len(train_data)
     num_batch = np.ceil(data_size / model_config.batch_size)
     t_total = model_config.num_epoch * num_batch
-    optimizer, scheduler = get_optimizer(model, model_config, t_total)
+    optimizer, scheduler = get_optimizer(model, t_total)
 
     exp_loss = None
     global_step = 0
@@ -65,14 +68,15 @@ def train(output_root_dir, train_data, dev_data, model_config):
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), model_config.max_grad_norm)
             optimizer.step()
-            scheduler.step()
+            #scheduler.step()
 
             global_step += 1
 
             exp_loss = 0.99 * exp_loss + 0.01 * loss.item() if exp_loss else loss.item()
 
             if True: #global_step > 0 and global_step % print_interval == 0:
-                print(f'{global_step} / {t_total} train loss: {exp_loss} lr: {scheduler.get_lr()[0]}', flush=True)
+                #print(f'{global_step} / {t_total} train loss: {exp_loss} lr: {scheduler.get_lr()[0]}', flush=True)
+                print(f'{global_step} / {t_total} train loss: {exp_loss}', flush=True)
 
         ler = eval_utils.evaluate(dev_data, model, model_config.batch_size, is_cuda)
         print(f'{global_step}/{t_total} LER {ler:.5f}', flush=True)
@@ -91,7 +95,8 @@ def train(output_root_dir, train_data, dev_data, model_config):
             with open(os.path.join(output_dir, "training_config.json"), 'w') as fout:
                 json.dump(vars(model_config), fout)
 
-    print(f'{global_step} / {t_total} train loss: {exp_loss} lr: {scheduler.get_lr()[0]}', flush=True)
+    #print(f'{global_step} / {t_total} train loss: {exp_loss} lr: {scheduler.get_lr()[0]}', flush=True)
+    print(f'{global_step} / {t_total} train loss: {exp_loss}', flush=True)
 
 def process_train(root_dir, data_dir, model_config_filename):
     output_root_dir = os.path.join(root_dir, 'dl_model') #f'dl_model_{int(time.time())}')

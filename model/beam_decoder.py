@@ -16,6 +16,16 @@ class BeamEntry(object):
         self.P_path_full = None
         self.P_path_partial = None
 
+def prefix_serach_decoding(logprob, T, threshold):
+    ranges = prefix_beam_search_split(logprob, T, threshold)
+    path = []
+    for s, e in ranges:
+        curr_logprob = logprob[s:e+1]
+        curr_T = e - s + 1
+        curr_path = prefix_beam_search(curr_logprob, curr_T)
+        path.extend(curr_path)
+    return path
+
 def prefix_beam_search_split(logprob, T, threshold):
     start = 0
     ranges = []
@@ -27,7 +37,8 @@ def prefix_beam_search_split(logprob, T, threshold):
         ranges.append((start, T-1))
     return ranges
 
-def prefix_beam_search(logprob, T, num_tags):
+def prefix_beam_search(logprob, T):
+    num_tags = logprob.shape[0] - 1
     beam = []
     gamma = []
     gamma_entry = GammaEntry()

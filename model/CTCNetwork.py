@@ -99,5 +99,5 @@ class ConnectionistTemporalClassification(nn.Module):
 
         out_paths = []
         for logprob, T in zip(logprobs, length):
-            out_paths.append(prefix_beam_search(logprob, T, self.model_config.num_tags))
+            out_paths.append(prefix_beam_search(logprob, T))
         return out_paths

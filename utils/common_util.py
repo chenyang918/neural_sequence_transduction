@@ -9,7 +9,8 @@ def init_lstm_wt(lstm):
         for name in names:
             if name.startswith('weight_'):
                 wt = getattr(lstm, name)
-                drange = np.sqrt(6. / (np.sum(wt.size())))
+                #drange = np.sqrt(6. / (np.sum(wt.size())))
+                drange = 0.1
                 wt.data.uniform_(-drange, drange)
 
             elif name.startswith('bias_'):
@@ -22,7 +23,8 @@ def init_lstm_wt(lstm):
 
 
 def init_linear_wt(linear):
-    drange = np.sqrt(6. / (np.sum(linear.weight.size())))
+    #drange = np.sqrt(6. / (np.sum(linear.weight.size())))
+    drange = 0.1
     linear.weight.data.uniform_(-drange, drange)
 
     if linear.bias is not None:
