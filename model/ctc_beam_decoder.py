@@ -1,8 +1,15 @@
 import numpy as np
 
 def logsumexp(a, b):
-    m = np.max(a,b)
-    return np.log(np.exp(a-m) + np.exp(b-m)) + m
+    if a is None and b is None:
+        return None
+    elif a is None:
+        return b
+    elif b is None:
+        return a
+    mx = max(a, b)
+    mn = min(a, b)
+    return np.log(1.0 + np.exp(mn-mx)) + mx
 
 class GammaEntry(object):
     def __init__(self):
@@ -37,19 +44,22 @@ def prefix_beam_search_split(logprob, T, threshold):
         ranges.append((start, T-1))
     return ranges
 
+#page 64 Prefix Search Decoding Algorithm
+#Supervised Sequence Labelling with Recurrent Neural Networks (https://www.cs.toronto.edu/~graves/preprint.pdf
 def prefix_beam_search(logprob, T):
+    ZERO_LOG_PROB=None
     num_tags = logprob.shape[0] - 1
     beam = []
     gamma = []
     gamma_entry = GammaEntry()
     gamma_entry.blank = logprob[0, 0]
-    gamma_entry.other = 0
+    gamma_entry.other = ZERO_LOG_PROB
     gamma.append(gamma_entry)
 
     for t in range(1, T):
         gamma_entry = GammaEntry()
-        gamma_entry.blank = logprob[t, 0] + gamma[-1].blank
-        gamma_entry.other = 0
+        gamma_entry.blank = logsumexp(logprob[t, 0], gamma[-1].blank)
+        gamma_entry.other = ZERO_LOG_PROB
         gamma.append(gamma_entry)
 
     beam_entry = BeamEntry()
@@ -74,8 +84,8 @@ def prefix_beam_search(logprob, T):
 
             gamma = []
             gamma_entry = GammaEntry()
-            gamma_entry.other = logprob[0, k] if p_star.path == [] else 0
-            gamma_entry.blank = 0
+            gamma_entry.other = logprob[0, k] if p_star.path == [] else ZERO_LOG_PROB
+            gamma_entry.blank = ZERO_LOG_PROB
             gamma.append(gamma_entry)
 
             prefix_prob = gamma_entry.other
@@ -109,9 +119,12 @@ def prefix_beam_search(logprob, T):
     return l_star
 
 if __name__ == '__main__':
-    logprob = np.zeros((2, 3))
-    logprob[0,:] = np.log([0.6, 0.39, 0.01])
-    logprob[1, :] = np.log([0.6, 0.39, 0.01])
-    print(prefix_beam_search(logprob, 2, 2))
+    prob = np.array([[2, 0, 0, 0, 0], [1, 3, 0, 0, 0 ], [ 1, 4, 1, 0, 0 ], [ 1, 1, 5, 6, 0 ],
+    [ 1, 1, 1, 1, 1 ], [ 1, 1, 7, 1, 1 ], [ 9, 1, 1, 1, 1 ]])
+    from scipy.special import softmax
+    logprob = np.log(softmax(prob, axis = 1))
+    alphabet = ['B','a', 'b', 'c', 'd' ]
+    print([alphabet[p] for p in prefix_beam_search(logprob, 7)])
+    #dacba
     #max path
-    print([k for k in np.argmax(logprob, axis=1) if k != 0])
+    print([alphabet[k] for k in np.argmax(logprob, axis=1) if k != 0])

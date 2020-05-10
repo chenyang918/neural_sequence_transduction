@@ -50,7 +50,7 @@ def train(output_root_dir, train_data, dev_data, model_config):
 
     exp_loss = None
     global_step = 0
-    best_score = 0
+    best_score = eval_utils.evaluate(dev_data, model, model_config.batch_size, is_cuda)
     print_interval = 1000 * model_config.batch_size
 
     for epoch in range(model_config.num_epoch):
